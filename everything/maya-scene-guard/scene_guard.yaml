@@ -1,0 +1,83 @@
+# ---------------------------------------------------------------------------
+# Maya Scene Guard 站点配置示例
+# 用法：scene_guard.install(config_path='.../scene_guard.yaml')
+# 只需写要覆盖的键，其余沿用 scene_guard/config.py 里的默认值。
+# ---------------------------------------------------------------------------
+
+# 恶意 script 节点名字黑名单（命中即删）
+virus_node_names:
+  - vaccine_gene
+  - breed_gene
+  - fuckVirus_gene
+  - maya_secure_system
+  - maya_secure_system_scriptNode
+
+# 节点脚本内容特征（命中任一即删）
+virus_node_codes:
+  - import base64
+  - vaccine_gene
+  - breed_gene
+  - fuckVirus
+  - MayaSecureSystem
+  - CgAbBlastPanelOptChangeCallback
+
+# 可疑 scriptJob 关键字
+script_job_blacklist:
+  - vaccine
+  - daxunhuan
+  - PuTianTongQing
+  - "()"
+
+# 重要：这些 unknown 插件保留 requires 条目。
+# 抹掉后存盘，依赖它的节点（如相机遮幅类显示插件）会永久丢失且无任何提示。
+unknown_plugin_whitelist:
+  - stereoCamera
+  # - your_studio_camera_overlay
+  # - your_studio_mask_node
+
+# unknown 节点白名单（按基础名匹配，会自动去掉命名空间与尾部数字）
+unknown_node_whitelist: []
+  # - mask_node
+
+# unknownDag 节点名字模式，留空则不清理
+unknown_dag_name_patterns: []
+  # - shotmask
+
+# 用户脚本目录里允许保留的文件，其余改名隔离
+user_script_keep:
+  - userSetup.py
+  - userSetup.mel
+quarantine_suffix: .quarantined
+
+# ---------------------------------------------------------------------------
+# 回调挂载表
+# ---------------------------------------------------------------------------
+
+# 读场景之前：关闭 script 节点自动执行（第一道防线）
+before_open:
+  - disable_script_node_execution
+
+# 读完场景之后：清理链。注册器会在 finally 里自动恢复执行开关，
+# 不需要也不应该在这里手写 restore_script_node_execution。
+after_open:
+  - kill_virus_script_nodes
+  - clear_script_jobs
+  - clear_unknown_nodes
+  - clear_unknown_dag_nodes
+  - clear_unknown_plugins
+  - quarantine_user_scripts
+  # 下面这个会删掉白名单之外的全部 script 节点，比病毒清理激进，按需开启
+  # - clear_script_nodes
+
+# 保存之前
+before_save: []
+  # - backup_before_save
+
+# scriptJob 事件 -> 动作名（动作需先 register_action 注册）
+script_jobs: {}
+  # SceneOpened:
+  #   - your_custom_action
+
+# 定时器：动作名 -> 间隔分钟
+timer: {}
+  # your_autosave_reminder: 30

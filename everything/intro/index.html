@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CodeMaker · 60 秒自我介绍</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #050506; overflow: hidden; }
+  body { display: grid; place-items: center; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  canvas { display: block; width: min(100vw, 177.78vh); height: min(56.25vw, 100vh); }
+  #ui { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(5,5,6,.6); backdrop-filter: blur(8px); transition: opacity .6s; }
+  #ui.hide { opacity: 0; pointer-events: none; }
+  .card { text-align: center; color: #ede7db; }
+  .card h1 { margin: 0 0 8px; font-weight: 600; font-size: 28px; letter-spacing: .02em; }
+  .card h1 i { display: inline-block; width: 10px; height: 10px; margin-left: 6px; background: #ff5b37; }
+  .card h2 { margin: 0 0 36px; font-weight: 300; font-size: 14px; letter-spacing: .35em; color: rgba(237,231,219,.5); }
+  .card button { font-family: inherit; font-size: 14px; letter-spacing: .1em; padding: 14px 28px; margin: 0 6px; border-radius: 999px; cursor: pointer; color: #ede7db; background: transparent; border: 1px solid rgba(237,231,219,.25); transition: all .25s; }
+  .card button:hover { border-color: #ff5b37; color: #fff; }
+  .card button.primary { background: #ede7db; color: #0b0b0d; border-color: #ede7db; }
+  .card button.primary:hover { background: #fff; }
+  .card p { margin: 28px 0 0; font-size: 12px; letter-spacing: .12em; color: rgba(237,231,219,.38); }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="ui">
+  <div class="card">
+    <h1>CodeMaker<i></i></h1>
+    <h2>60 秒 · 纯代码 · 零素材</h2>
+    <button class="primary" id="play">▶ 播放</button>
+    <button id="rec">● 播放并录制 WebM</button>
+    <p>空格 暂停 / 继续 · F 全屏 · 录制时请保持本标签页在前台</p>
+  </div>
+</div>
+<script>
+'use strict';
+/* ============================================================
+ *  CodeMaker — a 60-second self introduction.
+ *  1 file · 0 assets · canvas 2D + Web Audio · vanilla JS.
+ *  Every frame is a pure function of time: render(t).
+ * ============================================================ */
+
+const SRC = document.currentScript.textContent.split('\n').map(s => s.replace(/\s+$/, '')).filter(s => s.trim().length > 2);
+
+const W = 1920, H = 1080, DUR = 60, FPS = 30, BEAT = 60 / 90;
+const cv = document.getElementById('stage');
+const g = cv.getContext('2d');
+cv.width = W; cv.height = H;
+
+const C = { bg: '#0b0b0d', ink: '#ede7db', acc: '#ff5b37', cool: '#7fb8ff' };
+const ink = a => `rgba(237,231,219,${a})`;
+const acc = a => `rgba(255,91,55,${a})`;
+const cool = a => `rgba(127,184,255,${a})`;
+const SANS = '"Inter","SF Pro Display","Segoe UI","Helvetica Neue","PingFang SC","Microsoft YaHei",sans-serif';
+const MONO = '"JetBrains Mono","Cascadia Code","SF Mono",Consolas,monospace';
+
+/* ---------- math ---------- */
+const TAU = Math.PI * 2;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const fade = (t, a, b, fi = .6, fo = .6) => Math.min(prog(t, a, a + fi), 1 - prog(t, b - fo, b));
+const ease = {
+  outExpo: x => x >= 1 ? 1 : 1 - Math.pow(2, -10 * x),
+  outCubic: x => 1 - Math.pow(1 - x, 3),
+  inCubic: x => x * x * x,
+  inOut: x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2,
+};
+const pulse = t => { const b = (t - 6) / BEAT; return b < 0 ? 0 : Math.exp(-(b % 1) * 6); };
+const hash = (s, k) => { const x = Math.sin(s * 1e3 + k * 12.9898) * 43758.5453; return x - Math.floor(x); };
+
+function rng(seed) {
+  return () => {
+    seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function shuffle(a, r) {
+  for (let i = a.length - 1; i > 0; i--) { const j = (r() * (i + 1)) | 0; [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+const perm = new Uint8Array(512);
+{ const p = shuffle([...Array(256).keys()], rng(7)); for (let i = 0; i < 512; i++) perm[i] = p[i & 255]; }
+const smooth5 = t => t * t * t * (t * (t * 6 - 15) + 10);
+const grad = (h, x, y) => (h & 1 ? -x : x) + (h & 2 ? -y : y);
+function noise(x, y) {
+  const fx = Math.floor(x), fy = Math.floor(y), X = fx & 255, Y = fy & 255;
+  x -= fx; y -= fy;
+  const u = smooth5(x), v = smooth5(y), a = perm[X] + Y, b = perm[X + 1] + Y;
+  return lerp(lerp(grad(perm[a], x, y), grad(perm[b], x - 1, y), u),
+              lerp(grad(perm[a + 1], x, y - 1), grad(perm[b + 1], x - 1, y - 1), u), v);
+}
+
+/* ---------- typography ---------- */
+function text(str, x, y, o = {}) {
+  const { t = 0, at = null, dur = 1.1, size = 40, weight = 400, family = SANS, color = C.ink,
+          align = 'left', alpha = 1, ls = 0, dot = false } = o;
+  if (alpha <= 0) return;
+  const p = at === null ? 1 : ease.outExpo(prog(t, at, at + dur));
+  if (p <= 0) return;
+  g.save();
+  g.globalAlpha *= alpha;
+  g.font = `${weight} ${size}px ${family}`;
+  g.textAlign = align;
+  g.textBaseline = 'alphabetic';
+  g.letterSpacing = ls + 'px';
+  const w = g.measureText(str).width;
+  if (at !== null) { g.beginPath(); g.rect(0, y - size * 1.1, W, size * 1.45); g.clip(); }
+  const dy = (1 - p) * size * 1.3;
+  g.fillStyle = color;
+  g.fillText(str, x, y + dy);
+  if (dot) {
+    const end = align === 'center' ? x + w / 2 : align === 'right' ? x : x + w, d = size * .14;
+    g.fillStyle = C.acc;
+    g.fillRect(end + d * .5, y + dy - d, d, d);
+  }
+  g.restore();
+}
+
+function title(t, at, out, idx, en, main, sub, x = 150) {
+  const a = 1 - prog(t, out, out + .6);
+  if (t < at - .2 || a <= 0) return;
+  text(`0${idx} — ${en}`, x, 724, { t, at: at - .15, size: 16, family: MONO, color: acc(.95), ls: 4, alpha: a });
+  text(main, x, 868, { t, at, size: 112, weight: 700, alpha: a, ls: -2, dot: true });
+  text(sub, x, 934, { t, at: at + .3, size: 30, weight: 300, color: ink(.55), alpha: a, ls: 1 });
+}
+
+/* ---------- 00 BOOT ---------- */
+const HELLO = 'hello, world';
+const TYPE_T = (() => { const r = rng(5); let x = .9; return [...HELLO].map(() => (x += .07 + r() * .12)); })();
+
+function sBoot(t) {
+  if (t > 6.6) return;
+  const c = ease.inCubic(prog(t, 3.7, 4.5));
+  if (c < 1) {
+    const n = TYPE_T.reduce((k, x) => k + (x <= t), 0);
+    g.save();
+    g.globalAlpha = prog(t, 0, .4);
+    g.font = `400 46px ${MONO}`;
+    g.textBaseline = 'middle';
+    const x0 = -g.measureText('> ' + HELLO).width / 2;
+    g.translate(W / 2, H / 2);
+    g.scale(1 - c, 1 - c * .92);
+    g.fillStyle = C.acc; g.fillText('>', x0, 0);
+    g.fillStyle = C.ink; g.fillText(HELLO.slice(0, n), x0 + g.measureText('> ').width, 0);
+    const cx = x0 + g.measureText('> ' + HELLO.slice(0, n)).width + 6;
+    const typing = t > TYPE_T[0] - .2 && t < TYPE_T.at(-1) + .4;
+    if (typing || Math.floor(t / .53) % 2 === 0) { g.fillStyle = C.acc; g.fillRect(cx, -25, 24, 50); }
+    g.restore();
+  }
+  if (t > 4.3 && t < 5.05) {
+    g.save();
+    g.shadowColor = C.ink; g.shadowBlur = 40;
+    g.fillStyle = C.ink;
+    g.beginPath(); g.arc(W / 2, H / 2, lerp(1.5, 7, ease.outCubic(prog(t, 4.3, 5))), 0, TAU); g.fill();
+    g.restore();
+  }
+  for (const [d, col] of [[0, acc], [.14, ink]]) {
+    const s = prog(t, 5 + d, 6.5 + d);
+    if (s <= 0 || s >= 1) continue;
+    g.strokeStyle = col((1 - s) * .6);
+    g.lineWidth = 1 + (1 - s) * 2;
+    g.beginPath(); g.arc(W / 2, H / 2, ease.outExpo(s) * 1150, 0, TAU); g.stroke();
+  }
+  const f = 1 - prog(t, 5, 5.7);
+  if (t > 5 && f > 0) { g.fillStyle = ink(.07 * f); g.fillRect(0, 0, W, H); }
+}
+
+/* ---------- particles: CodeMaker / Let's build. ---------- */
+function sampleText(str, size, cy) {
+  const o = document.createElement('canvas'); o.width = W; o.height = H;
+  const c = o.getContext('2d', { willReadFrequently: true });
+  c.font = `800 ${size}px ${SANS}`; c.letterSpacing = '-6px';
+  c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#fff';
+  c.fillText(str, W / 2, cy);
+  const d = c.getImageData(0, 0, W, H).data, pts = [];
+  for (let y = 0; y < H; y += 5) for (let x = 0; x < W; x += 5) if (d[(y * W + x) * 4 + 3] > 128) pts.push([x, y]);
+  return pts;
+}
+const NP = 2600;
+const PTS = (() => {
+  const r = rng(42);
+  const T1 = shuffle(sampleText('CodeMaker', 250, H * .44), r);
+  const T2 = shuffle(sampleText("Let's build.", 220, H * .44), r);
+  return Array.from({ length: NP }, (_, i) => ({
+    ang: r() * TAU, rad: 160 + Math.sqrt(r()) * 900, d: r(), s: r(), n: r() * 100,
+    a: T1[i % T1.length], b: T2[i % T2.length], hot: r() < .07,
+  }));
+})();
+
+function particles(t) {
+  const A = t > 5 && t < 15.6, B = t > 50.6 && t < 59;
+  if (!A && !B) return;
+  g.save();
+  g.globalCompositeOperation = 'lighter';
+  for (const p of PTS) {
+    const jx = noise(p.n, t * .8) * 2.4, jy = noise(p.n + 5, t * .8) * 2.4;
+    let x, y, al;
+    if (A) {
+      const an = p.ang + t * .04 * (p.s - .5);
+      const dx0 = W / 2 + Math.cos(an) * p.rad * 1.1, dy0 = H / 2 + Math.sin(an) * p.rad * .6;
+      const dx = dx0 + noise(dx0 * .0025, dy0 * .0025 + t * .15) * 70;
+      const dy = dy0 + noise(dy0 * .0025 + 9, dx0 * .0025 + t * .15) * 70;
+      const b = ease.outExpo(prog(t, 5 + p.d * .25, 6.9 + p.d * .25));
+      x = lerp(W / 2, dx, b); y = lerp(H / 2, dy, b);
+      const f = ease.inOut(prog(t, 7.2 + p.d * 1.4, 8.8 + p.d * 1.4));
+      x = lerp(x, p.a[0] + jx, f); y = lerp(y, p.a[1] + jy, f);
+      const s = ease.inCubic(prog(t, 12.6 + p.d * .9, 14.6 + p.d * .9));
+      if (s > 0) {
+        const an2 = noise(x * .004, y * .004) * TAU * 2;
+        x += Math.cos(an2) * s * 420 + s * s * 500;
+        y += Math.sin(an2) * s * 260 - s * 140;
+      }
+      al = (1 - s) * (.3 + .7 * f) * (b < .05 ? .6 : 1);
+    } else {
+      const an = p.ang + t * .03;
+      const fx = W / 2 + Math.cos(an) * (p.rad * 1.2 + 520), fy = H / 2 + Math.sin(an) * (p.rad * .75 + 320);
+      const f = ease.inOut(prog(t, 50.8 + p.d * 1.6, 52.8 + p.d * 1.6));
+      x = lerp(fx + noise(fx * .003, t * .2) * 90, p.b[0] + jx, f);
+      y = lerp(fy + noise(fy * .003 + 3, t * .2) * 90, p.b[1] + jy, f);
+      const c = ease.inOut(prog(t, 57.1 + p.d * .5, 58.3 + p.d * .5));
+      x = lerp(x, W / 2, c); y = lerp(y, H / 2, c);
+      al = prog(t, 50.6, 51.8) * (.25 + .75 * f) * (1 - c * c * .9);
+    }
+    if (al <= .01) continue;
+    g.globalAlpha = al;
+    g.fillStyle = p.hot ? C.acc : C.ink;
+    const sz = p.hot ? 3 : 2.2;
+    g.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+  }
+  g.restore();
+}
+
+/* ---------- 01 HELLO ---------- */
+function sHello(t) {
+  const a = 1 - prog(t, 12.4, 13);
+  if (t < 9.6 || a <= 0) return;
+  text('你好，我是 CodeMaker', W / 2, 700, { t, at: 9.8, size: 50, weight: 300, align: 'center', alpha: a, dot: true });
+  text('一个住在你编辑器里的 AI 编程伙伴', W / 2, 764, { t, at: 10.2, size: 26, weight: 300, align: 'center', color: ink(.5), alpha: a, ls: 6 });
+}
+
+/* ---------- 02 READ ---------- */
+const SEEDS = (() => { const r = rng(21); return Array.from({ length: 560 }, () => ({ x: r() * W * 1.1 - W * .05, y: r() * H * 1.1 - H * .05, hot: r() < .06 })); })();
+
+function sRead(t) {
+  const a = fade(t, 14, 24.4, .8, 1);
+  if (a <= 0) return;
+  const lt = t - 14;
+
+  g.font = `400 15px ${MONO}`;
+  const lh = 24, off = lt * 46;
+  for (let col = 0; col < 3; col++) {
+    const x = 120 + col * 600, start = Math.floor(off / lh);
+    for (let k = 0; k < H / lh + 2; k++) {
+      const y = k * lh - (off % lh);
+      const line = SRC[(start + k + col * 137) % SRC.length].slice(0, 64);
+      const focus = Math.abs(y - H / 2) < lh / 2;
+      g.fillStyle = ink((focus ? .42 : .06) * a);
+      g.fillText(line, x, y);
+      if (focus) { g.fillStyle = acc(a); g.fillText('▸', x - 24, y); }
+    }
+  }
+
+  const L = Math.floor(lerp(3, 42, ease.outCubic(prog(lt, 0, 3.5))));
+  const field = (hot) => {
+    g.beginPath();
+    for (const s of SEEDS) {
+      if (s.hot !== hot) continue;
+      let x = s.x, y = s.y;
+      g.moveTo(x, y);
+      for (let k = 0; k < L; k++) {
+        const an = noise(x * .0016, y * .0016 + t * .06) * TAU * 1.1 + t * .05;
+        x += Math.cos(an) * 7; y += Math.sin(an) * 7;
+        g.lineTo(x, y);
+      }
+    }
+    g.stroke();
+  };
+  g.save();
+  g.lineCap = 'round';
+  g.lineWidth = 1.2; g.strokeStyle = ink((.2 + pulse(t) * .06) * a); field(false);
+  g.lineWidth = 1.8; g.strokeStyle = acc(.9 * a); g.setLineDash([16, 22]); g.lineDashOffset = -t * 70; field(true);
+  g.restore();
+
+  const k = ease.outExpo(prog(t, 15, 21.5));
+  const sc = g.createLinearGradient(0, 560, 0, 1000);
+  sc.addColorStop(0, 'rgba(11,11,13,0)'); sc.addColorStop(.35, `rgba(11,11,13,${.85 * a})`); sc.addColorStop(1, `rgba(11,11,13,${.85 * a})`);
+  g.fillStyle = sc; g.fillRect(0, 560, W, 440);
+  text('FILES INDEXED', W - 150, 200, { size: 15, family: MONO, color: ink(.4), align: 'right', ls: 4, alpha: a });
+  text(Math.round(k * 1284).toLocaleString('en-US'), W - 150, 262, { size: 56, family: MONO, align: 'right', alpha: a });
+  text('LINES READ', W - 150, 330, { size: 15, family: MONO, color: ink(.4), align: 'right', ls: 4, alpha: a });
+  text(Math.round(k * 186902).toLocaleString('en-US'), W - 150, 392, { size: 56, family: MONO, align: 'right', alpha: a });
+
+  title(t, 14.6, 23.4, 2, 'READ', '我读代码', '先读懂，再动手。一万行也好，一个函数也罢。');
+}
+
+/* ---------- 03 THINK ---------- */
+const GR = (() => {
+  const r = rng(3), X0 = 160, X1 = W - 160, Y0 = 150, Y1 = 680, nodes = [];
+  for (let i = 0; i < 72; i++) {
+    let best = null, bd = -1;
+    for (let c = 0; c < 14; c++) {
+      const p = [lerp(X0, X1, r()), lerp(Y0, Y1, r())];
+      const d = nodes.reduce((m, q) => Math.min(m, Math.hypot(p[0] - q.x, p[1] - q.y)), Infinity);
+      if (d > bd) { bd = d; best = p; }
+    }
+    nodes.push({ x: best[0], y: best[1], r: r() });
+  }
+  const N = nodes.length, dist = (i, j) => Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y);
+  const keys = new Set(), edges = [], adj = nodes.map(() => []);
+  const link = (i, j) => {
+    const k = Math.min(i, j) + ':' + Math.max(i, j);
+    if (keys.has(k)) return;
+    keys.add(k); edges.push({ a: i, b: j }); adj[i].push(j); adj[j].push(i);
+  };
+  nodes.forEach((_, i) => [...nodes.keys()].filter(j => j !== i).sort((p, q) => dist(i, p) - dist(i, q)).slice(0, 2).forEach(j => link(i, j)));
+  const inTree = new Set([0]);                                   // Prim's MST guarantees connectivity
+  while (inTree.size < N) {
+    let bi = -1, bj = -1, bd = Infinity;
+    for (const i of inTree) for (let j = 0; j < N; j++) if (!inTree.has(j) && dist(i, j) < bd) { bd = dist(i, j); bi = i; bj = j; }
+    link(bi, bj); inTree.add(bj);
+  }
+  const near = (px, py) => nodes.reduce((m, n, i) => Math.hypot(n.x - px, n.y - py) < Math.hypot(nodes[m].x - px, nodes[m].y - py) ? i : m, 0);
+  const s = near(X0, Y1 - 60), e = near(X1, Y0 + 60);
+  const D = Array(N).fill(Infinity), prev = Array(N).fill(-1), done = new Set();   // Dijkstra
+  D[s] = 0;
+  while (done.size < N) {
+    let u = -1;
+    for (let i = 0; i < N; i++) if (!done.has(i) && (u < 0 || D[i] < D[u])) u = i;
+    done.add(u);
+    for (const v of adj[u]) if (D[u] + dist(u, v) < D[v]) { D[v] = D[u] + dist(u, v); prev[v] = u; }
+  }
+  const path = [];
+  for (let v = e; v !== -1; v = prev[v]) path.unshift(v);
+  const cum = path.map((v, k) => k ? D[v] : 0);
+  const maxD = Math.max(...D);
+  nodes.forEach((n, i) => { n.t = 24.2 + (n.x - X0) / (X1 - X0) * 1.5 + n.r * .2; n.v = 26 + D[i] / maxD * 1.6; });
+  edges.forEach(ed => { ed.t = Math.max(nodes[ed.a].t, nodes[ed.b].t) + .15; });
+  const pool = ['router.ts', 'auth()', 'schema.sql', 'cache.get'], last = path.length - 1;
+  const picks = new Map(pool.map((p, k) => [Math.round((k + 1) * last / (pool.length + 1)), p]));
+  const labels = path.map((_, k) => k === 0 ? 'issue #42' : k === last ? 'merge ✓' : picks.get(k) ?? null);
+  return { nodes, edges, path, cum, len: D[e], labels };
+})();
+
+function sThink(t) {
+  const a = fade(t, 24, 34.4, .5, 1);
+  if (a <= 0) return;
+  const N = GR.nodes, P = GR.path, pu = pulse(t);
+  const head = ease.inOut(prog(t, 27.8, 30.8)) * GR.len;
+  const dim = 1 - .55 * prog(t, 27.4, 28.2);
+
+  g.save();
+  g.globalAlpha = a;
+  g.lineWidth = 1;
+  g.strokeStyle = ink(.16 * dim);
+  g.beginPath();
+  for (const e of GR.edges) {
+    const p = ease.outCubic(prog(t, e.t, e.t + .7));
+    if (p <= 0) continue;
+    const A = N[e.a], B = N[e.b];
+    g.moveTo(A.x, A.y); g.lineTo(lerp(A.x, B.x, p), lerp(A.y, B.y, p));
+  }
+  g.stroke();
+
+  for (const n of N) {
+    const p = ease.outCubic(prog(t, n.t, n.t + .5));
+    if (p <= 0) continue;
+    const v = prog(t, n.v, n.v + .7), flash = v > 0 && v < 1 ? 1 - v : 0;
+    const r = (2.5 + n.r * 3) * p + pu * .8;
+    g.fillStyle = ink((.3 + .2 * dim + .5 * flash));
+    g.beginPath(); g.arc(n.x, n.y, r, 0, TAU); g.fill();
+    if (flash) {
+      g.strokeStyle = acc(flash * .8);
+      g.beginPath(); g.arc(n.x, n.y, r + v * 20, 0, TAU); g.stroke();
+    }
+  }
+
+  if (head > 0) {
+    let hx = N[P[0]].x, hy = N[P[0]].y;
+    g.strokeStyle = C.acc; g.lineWidth = 3; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(hx, hy);
+    for (let k = 1; k < P.length; k++) {
+      const A = N[P[k - 1]], B = N[P[k]];
+      if (GR.cum[k] <= head) { g.lineTo(B.x, B.y); hx = B.x; hy = B.y; continue; }
+      const f = (head - GR.cum[k - 1]) / (GR.cum[k] - GR.cum[k - 1]);
+      hx = lerp(A.x, B.x, f); hy = lerp(A.y, B.y, f); g.lineTo(hx, hy);
+      break;
+    }
+    g.stroke();
+    const glow = g.createRadialGradient(hx, hy, 0, hx, hy, 34);
+    glow.addColorStop(0, acc(.9)); glow.addColorStop(1, acc(0));
+    g.fillStyle = glow; g.fillRect(hx - 34, hy - 34, 68, 68);
+
+    P.forEach((v, k) => {
+      const l = clamp((head - GR.cum[k]) / 50);
+      if (l <= 0) return;
+      const n = N[v], last = k === P.length - 1;
+      g.fillStyle = C.acc;
+      g.beginPath(); g.arc(n.x, n.y, 6, 0, TAU); g.fill();
+      if (!GR.labels[k]) return;
+      g.globalAlpha = a * l;
+      g.font = `500 17px ${MONO}`;
+      g.fillStyle = last ? C.acc : ink(.85);
+      g.fillText(GR.labels[k], n.x + 14, n.y - 14 - (1 - l) * 8);
+      g.globalAlpha = a;
+    });
+  }
+
+  const e = N[P.at(-1)];
+  for (const d of [0, .5]) {
+    const s = prog(t, 30.8 + d, 32.6 + d);
+    if (s <= 0 || s >= 1) continue;
+    g.strokeStyle = acc(1 - s); g.lineWidth = 2;
+    g.beginPath(); g.arc(e.x, e.y, 6 + ease.outCubic(s) * 70, 0, TAU); g.stroke();
+  }
+  g.restore();
+
+  title(t, 24.6, 33.4, 3, 'THINK', '我思考', '把大问题拆小，找到最短、也最稳的那条路。');
+}
+
+/* ---------- 04 BUILD ---------- */
+const CODE = `// torus.js — 右边那个甜甜圈，就是它
+const torus = (R, r, n = 48, m = 24) => {
+  const pts = [];
+  for (let i = 0; i < n; i++)
+    for (let j = 0; j < m; j++) {
+      const u = i / n * TAU, v = j / m * TAU;
+      pts.push([
+        (R + r * cos(v)) * cos(u),
+        (R + r * cos(v)) * sin(u),
+        r * sin(v),
+      ]);
+    }
+  return pts;
+};
+
+loop(t => render(spin(torus(2, .8), t)));`.split('\n');
+
+const KW = /^(const|let|for|return|new|if)$/;
+function tokenize(line) {
+  const out = [], re = /(\s+)|(\/\/.*)|([A-Za-z_$][\w$]*)|(\d*\.?\d+)|(.)/g;
+  let m;
+  while ((m = re.exec(line))) {
+    const s = m[0];
+    const col = m[2] ? ink(.35) : m[3] ? (KW.test(s) ? C.acc : /^[A-Z]+$/.test(s) ? C.cool : ink(.92)) : m[4] ? C.cool : ink(.42);
+    out.push([s, col]);
+  }
+  return out;
+}
+const TOKENS = CODE.map(tokenize);
+const CODE_LEN = CODE.reduce((s, l) => s + l.length + 1, 0);
+
+function drawTorus(t, cx, cy, sc, frac, a) {
+  g.save();
+  g.strokeStyle = ink(.07 * a); g.lineWidth = 1;
+  g.beginPath(); g.moveTo(cx - 330, cy); g.lineTo(cx + 330, cy); g.moveTo(cx, cy - 250); g.lineTo(cx, cy + 250); g.stroke();
+  const n = 48, m = 24, show = Math.floor(n * m * frac), R = 2, r = .8;
+  const ax = t * .5 + .9, ay = t * .33;
+  const ca = Math.cos(ax), sa = Math.sin(ax), cb = Math.cos(ay), sb = Math.sin(ay);
+  g.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < show; k++) {
+    const i = (k / m) | 0, j = k % m, u = i / n * TAU, v = j / m * TAU;
+    const x = (R + r * Math.cos(v)) * Math.cos(u), y = (R + r * Math.cos(v)) * Math.sin(u), z = r * Math.sin(v);
+    const y1 = y * ca - z * sa, z1 = y * sa + z * ca;
+    const x2 = x * cb + z1 * sb, z2 = -x * sb + z1 * cb;
+    const d = 9 / (9 + z2), depth = clamp((z2 + 2.8) / 5.6), al = ((1 - depth) * .85 + .12) * a;
+    g.fillStyle = j === 0 ? acc(al) : i % 12 === 0 ? cool(al) : ink(al);
+    const s = (1.2 + (1 - depth) * 2.6) * (k > show - m ? 1.8 : 1);
+    g.fillRect(cx + x2 * sc * d - s / 2, cy + y1 * sc * d - s / 2, s, s);
+  }
+  g.restore();
+}
+
+function sBuild(t) {
+  const a = fade(t, 34, 44.3, .6, .9);
+  if (a <= 0) return;
+  const X = 100, Y = 120, PW = 900, PH = 690, sp = ease.outExpo(prog(t, 34, 35.2));
+
+  g.save();
+  g.globalAlpha = a * sp;
+  g.translate(0, (1 - sp) * 40);
+  g.fillStyle = 'rgba(255,255,255,.025)'; g.strokeStyle = ink(.1); g.lineWidth = 1;
+  g.beginPath(); g.roundRect(X, Y, PW, PH, 14); g.fill(); g.stroke();
+  [0, 1, 2].forEach(k => { g.fillStyle = ink(.16); g.beginPath(); g.arc(X + 28 + k * 20, Y + 28, 6, 0, TAU); g.fill(); });
+  g.font = `400 16px ${MONO}`;
+  g.fillStyle = ink(.5); g.fillText('torus.js', X + 104, Y + 34);
+  g.textAlign = 'right'; g.fillStyle = ink(.25); g.fillText('UTF-8 · JavaScript', X + PW - 24, Y + 34); g.textAlign = 'left';
+  g.fillStyle = ink(.08); g.fillRect(X, Y + 56, PW, 1);
+
+  g.font = `400 22px ${MONO}`;
+  const lh = 33, y0 = Y + 104;
+  let rem = Math.floor(prog(t, 34.8, 40.4) * CODE_LEN), cx = X + 82, cy = y0;
+  for (let li = 0; li < CODE.length && rem >= 0; li++) {
+    const y = y0 + li * lh;
+    g.textAlign = 'right'; g.fillStyle = ink(.2); g.fillText(String(li + 1), X + 56, y); g.textAlign = 'left';
+    let x = X + 82, left = Math.min(rem, CODE[li].length);
+    for (const [s, col] of TOKENS[li]) {
+      if (left <= 0) break;
+      const part = s.slice(0, left);
+      g.fillStyle = col; g.fillText(part, x, y);
+      x += g.measureText(part).width; left -= s.length;
+    }
+    cx = x; cy = y;
+    rem -= CODE[li].length + 1;
+  }
+  if (t < 40.4 || Math.floor(t / .53) % 2 === 0) { g.fillStyle = C.acc; g.fillRect(cx + 2, cy - 22, 3, 28); }
+
+  const ok = prog(t, 40.7, 41.1);
+  if (ok > 0) {
+    g.globalAlpha = a * sp * ok;
+    g.font = `500 16px ${MONO}`;
+    g.fillStyle = C.acc; g.fillText('✓ compiled · 0 errors · 3 ms', X + 82, Y + PH - 28);
+  }
+  g.restore();
+
+  drawTorus(t, 1450, 350, 82, ease.inOut(prog(t, 36, 41)), a);
+  text('1,152 vertices · 60 fps · 0 dependencies', 1450, 640, { t, at: 41, size: 16, family: MONO, color: ink(.38), align: 'center', ls: 2, alpha: a });
+  title(t, 34.5, 43.4, 4, 'BUILD', '我动手', '说到做到：写得出来，也跑得起来。', 1110);
+}
+
+/* ---------- 05 TASTE ---------- */
+const TILES = (() => {
+  const r = rng(11), cols = [C.ink, C.ink, C.acc, ink(.2), ink(.2), C.cool], out = [];
+  for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++)
+    out.push({ i, j, type: (r() * 6) | 0, col: cols[(r() * cols.length) | 0], rot: (r() * 4) | 0, seed: r(), bg: r() < .3 });
+  return out;
+})();
+
+function drawTile(tp, x, y, s, rot, sc) {
+  const h = s / 2;
+  g.save();
+  g.beginPath(); g.rect(x, y, s, s); g.clip();
+  if (tp.bg) { g.fillStyle = ink(.05 * sc); g.fillRect(x, y, s, s); }
+  g.translate(x + h, y + h); g.rotate(rot); g.scale(sc, sc);
+  g.fillStyle = g.strokeStyle = tp.col;
+  g.beginPath();
+  switch (tp.type) {
+    case 0: g.arc(0, 0, h * .78, 0, TAU); g.fill(); break;
+    case 1: g.moveTo(-h, -h); g.arc(-h, -h, s, 0, Math.PI / 2); g.closePath(); g.fill(); break;
+    case 2: g.arc(0, h, h, Math.PI, 0); g.closePath(); g.fill(); break;
+    case 3: g.moveTo(-h, -h); g.lineTo(h, -h); g.lineTo(-h, h); g.closePath(); g.fill(); break;
+    case 4: for (let k = 0; k < 4; k++) g.rect(-h, -h + k * s / 4, s, s / 9); g.fill(); break;
+    default: g.lineWidth = s * .12; g.arc(0, 0, h * .56, 0, TAU); g.stroke();
+  }
+  g.restore();
+}
+
+function sTaste(t) {
+  if (t < 44 || t > 52.6) return;
+  const S = 128, OX = 1120, OY = 170, b = (t - 6) / BEAT, bi = Math.floor(b), fr = b - bi, B0 = Math.floor((44 - 6) / BEAT);
+  for (const tp of TILES) {
+    const k = tp.i + tp.j;
+    const sc = ease.outCubic(prog(t, 44.3 + k * .07, 45.1 + k * .07)) * (1 - ease.inCubic(prog(t, 51.4 + k * .04, 52.2 + k * .04)));
+    if (sc <= 0) continue;
+    let turns = tp.rot;
+    for (let q = B0; q <= bi; q++) if (hash(tp.seed, q) < .2) turns += q < bi ? 1 : ease.inOut(clamp(fr * 2.2));
+    drawTile(tp, OX + tp.i * S, OY + tp.j * S, S, turns * Math.PI / 2, sc);
+  }
+
+  const a = 1 - prog(t, 51.2, 51.8);
+  [['01', 'RESTRAINT', '克制', '少即是多，删到不能再删。'],
+   ['02', 'CLARITY', '清晰', '代码首先是写给人读的。'],
+   ['03', 'IT WORKS', '可靠', '能跑起来，才算数。']].forEach(([n, en, zh, desc], k) => {
+    const at = 45 + k * 1.4, y = 250 + k * 160;
+    text(`${n} / ${en}`, 150, y - 72, { t, at, size: 15, family: MONO, color: C.acc, ls: 4, alpha: a });
+    text(zh, 150, y, { t, at: at + .08, size: 72, weight: 600, alpha: a });
+    text(desc, 340, y - 6, { t, at: at + .25, size: 28, weight: 300, color: ink(.55), alpha: a });
+  });
+  title(t, 44.5, 51.2, 5, 'TASTE', '我的审美', '不做加法，做减法。');
+}
+
+/* ---------- 06 TOGETHER ---------- */
+function sOutro(t) {
+  const a = 1 - prog(t, 56.8, 57.3);
+  if (t > 53 && a > 0) {
+    text('下一行代码，我们一起写。', W / 2, 700, { t, at: 53.4, size: 50, weight: 300, align: 'center', alpha: a, ls: 4 });
+    text('CodeMaker · 1 个 HTML 文件 · 0 素材 · 每一帧都是 render(t)', W / 2, 764, { t, at: 54, size: 18, family: MONO, align: 'center', color: ink(.4), ls: 2, alpha: a });
+  }
+  if (t > 58.6 && Math.floor((t - 58.6) / .45) % 2 === 0) {
+    g.fillStyle = C.acc; g.fillRect(W / 2 - 12, H / 2 - 25, 24, 50);
+  }
+}
+
+/* ---------- HUD & film ---------- */
+const CHAPTERS = [[0, 'BOOT'], [6, 'HELLO'], [14, 'READ'], [24, 'THINK'], [34, 'BUILD'], [44, 'TASTE'], [52, 'TOGETHER']];
+const VIGNETTE = (() => {
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'), gr = x.createRadialGradient(W / 2, H / 2, H * .35, W / 2, H / 2, H * 1.05);
+  gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.62)');
+  x.fillStyle = gr; x.fillRect(0, 0, W, H);
+  return c;
+})();
+const GRAIN = [0, 1, 2, 3].map(k => {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const x = c.getContext('2d'), img = x.createImageData(256, 256), r = rng(100 + k);
+  for (let i = 0; i < img.data.length; i += 4) { img.data[i] = img.data[i + 1] = img.data[i + 2] = r() * 255; img.data[i + 3] = 255; }
+  x.putImageData(img, 0, 0);
+  return g.createPattern(c, 'repeat');
+});
+
+function hud(t) {
+  const a = fade(t, 6, 58.2, 1, 1);
+  if (a <= 0) return;
+  const ci = CHAPTERS.findLastIndex(c => t >= c[0]);
+  g.save();
+  g.globalAlpha = a;
+  g.font = `500 15px ${MONO}`; g.letterSpacing = '4px';
+  g.fillStyle = ink(.85); g.fillText('CODEMAKER', 80, 78);
+  g.fillStyle = ink(.4); g.fillText(`0${ci} / 06  ${CHAPTERS[ci][1]}`, 260, 78);
+  const f = Math.floor(t * FPS), tc = [f / FPS / 60, (f / FPS) % 60, f % FPS].map(v => String(Math.floor(v)).padStart(2, '0')).join(':');
+  g.textAlign = 'right'; g.fillText(`${tc}  /  01:00:00`, W - 80, 78);
+  g.fillStyle = ink(.28); g.fillText('1920×1080 · 30FPS · VANILLA JS', W - 80, H - 76);
+  g.textAlign = 'left'; g.fillText('SELF-INTRO.HTML', 80, H - 76);
+  g.fillStyle = ink(.12); g.fillRect(80, H - 54, W - 160, 1);
+  g.fillStyle = C.acc; g.fillRect(80, H - 55, (W - 160) * clamp(t / DUR), 3);
+  for (const [c] of CHAPTERS) { g.fillStyle = ink(t >= c ? .7 : .25); g.fillRect(80 + (W - 160) * c / DUR, H - 60, 1, 12); }
+  g.strokeStyle = ink(.3); g.lineWidth = 1; g.beginPath();
+  for (const [x, y, sx, sy] of [[40, 40, 1, 1], [W - 40, 40, -1, 1], [40, H - 40, 1, -1], [W - 40, H - 40, -1, -1]]) {
+    g.moveTo(x + sx * 18, y); g.lineTo(x, y); g.lineTo(x, y + sy * 18);
+  }
+  g.stroke();
+  g.restore();
+}
+
+function render(t) {
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+  g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  if (t >= 0) {
+    sBoot(t); sRead(t); sThink(t); sBuild(t); sTaste(t);
+    particles(t); sHello(t); sOutro(t);
+  }
+  g.drawImage(VIGNETTE, 0, 0);
+  g.save();
+  g.globalCompositeOperation = 'overlay'; g.globalAlpha = .1;
+  g.fillStyle = GRAIN[Math.floor(Math.max(t, 0) * 24) % 4];
+  g.translate((t * 997) % 256, (t * 613) % 256);
+  g.fillRect(-256, -256, W + 512, H + 512);
+  g.restore();
+  hud(t);
+  const out = prog(t, 59.5, 60);
+  if (out > 0) { g.fillStyle = `rgba(0,0,0,${out})`; g.fillRect(0, 0, W, H); }
+}
+
+/* ---------- score: generated in Web Audio, scheduled on the same clock ---------- */
+const CHORDS = [
+  { root: 45, pad: [57, 60, 64, 67, 71] },   // Am9
+  { root: 41, pad: [53, 57, 60, 64, 67] },   // Fmaj9
+  { root: 48, pad: [52, 55, 59, 60, 62] },   // Cmaj9
+  { root: 43, pad: [55, 59, 62, 64, 69] },   // G6/9
+];
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+
+function score(ctx, out, t0) {
+  const sr = ctx.sampleRate, CH = BEAT * 8;
+  const master = ctx.createGain(); master.connect(out);
+  master.gain.setValueAtTime(0, t0); master.gain.linearRampToValueAtTime(.9, t0 + .5);
+  master.gain.setValueAtTime(.9, t0 + 57.5); master.gain.linearRampToValueAtTime(0, t0 + 60.2);
+  const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 3; comp.connect(master);
+
+  const ir = ctx.createBuffer(2, sr * 4, sr);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 3); }
+  const verb = ctx.createConvolver(); verb.buffer = ir;
+  const wet = ctx.createGain(); wet.gain.value = .45; verb.connect(wet).connect(comp);
+  const send = ctx.createGain(); send.connect(comp); send.connect(verb);
+  const echo = ctx.createDelay(2); echo.delayTime.value = BEAT * .75;
+  const fb = ctx.createGain(); fb.gain.value = .38;
+  const elp = ctx.createBiquadFilter(); elp.frequency.value = 2600;
+  echo.connect(elp).connect(fb).connect(echo); elp.connect(send);
+
+  const white = ctx.createBuffer(1, sr, sr);
+  { const d = white.getChannelData(0); for (let i = 0; i < sr; i++) d[i] = Math.random() * 2 - 1; }
+
+  const adsr = (v, at, peak, a, hold, r) => {
+    v.gain.setValueAtTime(0, at); v.gain.linearRampToValueAtTime(peak, at + a);
+    v.gain.setValueAtTime(peak, at + a + hold); v.gain.exponentialRampToValueAtTime(1e-4, at + a + hold + r);
+  };
+  const vca = (...dests) => { const v = ctx.createGain(); v.gain.value = 0; dests.forEach(d => v.connect(d)); return v; };
+  const osc = (type, f, at, end, dest, det = 0) => {
+    const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = det;
+    o.connect(dest); o.start(at); o.stop(end); return o;
+  };
+  const hiss = (at, dur, dest, type, f, q, gain) => {
+    const s = ctx.createBufferSource(); s.buffer = white;
+    const bq = ctx.createBiquadFilter(); bq.type = type; bq.frequency.value = f; bq.Q.value = q;
+    const v = vca(dest); adsr(v, at, gain, .002, 0, dur);
+    s.connect(bq).connect(v); s.start(at, Math.random() * .5); s.stop(at + dur + .05);
+  };
+  const bell = (at, base, amt) => [[1, .18, 3], [2.76, .08, 2], [5.4, .05, 1.2], [8.93, .02, .8]].forEach(([m, gn, d]) => {
+    const v = vca(send); adsr(v, at, gn * amt, .003, 0, d); osc('sine', base * m, at, at + d + .1, v);
+  });
+  const boom = (at, amt) => {
+    const v = vca(comp); adsr(v, at, .6 * amt, .005, 0, 1.6);
+    const o = osc('sine', 90, at, at + 1.8, v); o.frequency.exponentialRampToValueAtTime(32, at + .8);
+    hiss(at, 1.2, send, 'lowpass', 1400, .5, .18 * amt);
+  };
+  const T = x => t0 + x;
+
+  { const v = vca(send); v.gain.setValueAtTime(0, T(0)); v.gain.linearRampToValueAtTime(.1, T(4.8)); v.gain.exponentialRampToValueAtTime(1e-4, T(6));
+    osc('sine', mtof(45), T(0), T(6.2), v); osc('sine', mtof(52), T(0), T(6.2), v, 4); }
+  TYPE_T.forEach(x => hiss(T(x), .03, send, 'bandpass', 3200, 1.2, .25));
+  boom(T(5), 1); bell(T(5), mtof(76), 1);
+
+  for (let k = 0; ; k++) {
+    const at = 6 + k * CH;
+    if (at > 58) break;
+    const ch = CHORDS[k % 4], s = T(at), end = s + CH + 2.6;
+    const bright = at < 14 ? 900 : at < 50 ? 1700 : 1000;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = .6;
+    lp.frequency.setValueAtTime(380, s); lp.frequency.linearRampToValueAtTime(bright, s + CH * .5); lp.frequency.linearRampToValueAtTime(520, end);
+    const v = vca(send); lp.connect(v); adsr(v, s, .045, 1.6, CH - 1.6, 2.4);
+    ch.pad.forEach(n => { osc('sawtooth', mtof(n), s, end, lp, -7); osc('sawtooth', mtof(n), s, end, lp, 7); });
+    const bl = ctx.createBiquadFilter(); bl.frequency.value = 500;
+    const bv = vca(comp); bl.connect(bv); adsr(bv, s, .14, .3, CH - .3, .8);
+    osc('triangle', mtof(ch.root), s, s + CH + 1, bl);
+  }
+
+  const PAT = [0, 2, 4, 1, 3, 2, 4, 3];
+  for (let i = 0; ; i++) {
+    const at = 14 + i * BEAT / 2;
+    if (at >= 52 - 1e-6) break;
+    const ch = CHORDS[Math.floor((at - 6) / CH + 1e-6) % 4];
+    const v = vca(send, echo); adsr(v, T(at), i % 8 === 0 ? .07 : .045, .004, 0, .32);
+    osc('triangle', mtof(ch.pad[PAT[i % 8]] + 12), T(at), T(at) + .4, v);
+    if (at >= 34 && at < 44 && i % 4 === 2) {
+      const sp = vca(echo); adsr(sp, T(at), .03, .002, 0, .5);
+      osc('sine', mtof(ch.pad[4] + 24), T(at), T(at) + .6, sp);
+    }
+  }
+  for (let i = 0; ; i++) {
+    const at = 14 + i * BEAT;
+    if (at >= 52 - 1e-6) break;
+    const v = vca(comp); adsr(v, T(at), .5, .003, 0, .38);
+    const o = osc('sine', 140, T(at), T(at) + .45, v); o.frequency.exponentialRampToValueAtTime(42, T(at) + .12);
+    if (at >= 24) hiss(T(at + BEAT / 2), .05, send, 'highpass', 8000, .7, .05);
+  }
+  boom(T(52), .6); bell(T(52), mtof(81), .8);
+  bell(T(58.6), mtof(69), .5);
+}
+
+/* ---------- player ---------- */
+const ui = document.getElementById('ui');
+let ctx = null, rec = null;
+
+async function start(record) {
+  ui.classList.add('hide');
+  if (ctx) ctx.close();
+  ctx = new AudioContext();
+  const out = ctx.createGain(); out.connect(ctx.destination);
+  rec = null;
+  if (record) {
+    const md = ctx.createMediaStreamDestination(); out.connect(md);
+    const stream = new MediaStream([...cv.captureStream(FPS).getVideoTracks(), ...md.stream.getAudioTracks()]);
+    const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
+    const chunks = [];
+    rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 16e6 });
+    rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    rec.onstop = () => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob(chunks, { type: 'video/webm' }));
+      a.download = 'codemaker-intro.webm';
+      a.click();
+    };
+    rec.start();
+  }
+  const t0 = ctx.currentTime + .2;
+  score(ctx, out, t0);
+  const loop = () => {
+    const t = ctx.currentTime - t0;
+    render(t);
+    if (t < DUR + .3) return requestAnimationFrame(loop);
+    rec?.stop();
+    document.getElementById('play').textContent = '↻ 再看一遍';
+    ui.classList.remove('hide');
+  };
+  loop();
+}
+
+document.getElementById('play').onclick = () => start(false);
+document.getElementById('rec').onclick = () => start(true);
+addEventListener('keydown', e => {
+  if (e.code === 'KeyF') document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+  if (e.code === 'Space' && ctx && !rec) { e.preventDefault(); ctx.state === 'running' ? ctx.suspend() : ctx.resume(); }
+});
+
+const still = location.hash.match(/t=([\d.]+)/);
+if (still) { ui.classList.add('hide'); render(+still[1]); }
+else render(11.2);
+</script>
+</body>
+</html>

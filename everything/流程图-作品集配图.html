@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>作品集流程图 · 朱怡涵</title>
+<style>
+:root{
+  --ink:#1f2328; --sub:#5b6570; --line:#c9d3dd;
+  --blue:#1f4e79; --blue2:#2e74b5; --blue-bg:#eaf2fa;
+  --green:#2f7a54; --green-bg:#e8f5ee;
+  --red:#b4452f; --red-bg:#fdeeea;
+  --gray-bg:#f2f4f7; --amber:#8a6100; --amber-bg:#fdf3e0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:#dfe4ea; color:var(--ink);
+  font:14px/1.6 "Microsoft YaHei","微软雅黑",sans-serif;
+  padding:28px 20px 60px;
+}
+.tip{max-width:1040px;margin:0 auto 22px;font-size:13px;color:#4a5560;
+     background:#fff;border-left:4px solid var(--blue2);padding:10px 14px;border-radius:3px}
+.fig{max-width:1040px;margin:0 auto 34px;background:#fff;padding:26px 30px 30px;
+     border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.fig > h2{font-size:16px;color:var(--blue);margin-bottom:4px}
+.fig > .cap{font-size:12.5px;color:var(--sub);margin-bottom:20px}
+
+/* 通用盒子 */
+.box{border:1.5px solid var(--line);border-radius:4px;padding:9px 14px;background:#fff;text-align:center}
+.box b{display:block;font-size:13.5px}
+.box span{display:block;font-size:12px;color:var(--sub);margin-top:2px}
+.b-blue{border-color:var(--blue2);background:var(--blue-bg)}
+.b-blue b{color:var(--blue)}
+.b-green{border-color:#7bbd99;background:var(--green-bg)}
+.b-green b{color:var(--green)}
+.b-red{border-color:#dba396;background:var(--red-bg)}
+.b-red b{color:var(--red)}
+.b-amber{border-color:#d9b96a;background:var(--amber-bg)}
+.b-amber b{color:var(--amber)}
+.b-gray{background:var(--gray-bg)}
+.mono{font-family:Consolas,"Courier New",monospace;font-size:12px}
+
+/* 纵向箭头 */
+.arrow-d{width:0;height:20px;margin:0 auto;border-left:1.5px solid var(--line);position:relative}
+.arrow-d::after{content:"";position:absolute;left:-4.5px;bottom:-1px;
+  border:4.5px solid transparent;border-top-color:var(--line)}
+.arrow-d.lbl::before{content:attr(data-l);position:absolute;left:8px;top:1px;
+  font-size:11.5px;color:var(--sub);white-space:nowrap}
+/* 横向箭头 */
+.arrow-r{flex:0 0 34px;height:0;align-self:center;border-top:1.5px solid var(--line);position:relative}
+.arrow-r::after{content:"";position:absolute;right:-1px;top:-4.5px;
+  border:4.5px solid transparent;border-left-color:var(--line)}
+.arrow-r.lbl::before{content:attr(data-l);position:absolute;left:50%;transform:translateX(-50%);
+  top:-19px;font-size:11.5px;color:var(--sub);white-space:nowrap}
+
+.row{display:flex;align-items:stretch;justify-content:center}
+.cols{display:flex;gap:14px;justify-content:center}
+.cols > .box{flex:1}
+
+/* 分层图 */
+.layer{display:flex;align-items:center;gap:14px}
+.layer .tag{flex:0 0 78px;font-size:12px;color:var(--sub);text-align:right}
+.layer .body{flex:1}
+.dcc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.dcc-grid .box{padding:7px 6px;font-size:12.5px}
+.dcc-grid .box b{font-size:12.5px}
+
+/* 步骤列表 */
+.steps{border-left:2px solid var(--line);margin-left:16px;padding-left:0}
+.step{position:relative;padding:0 0 13px 30px}
+.step:last-child{padding-bottom:0}
+.step .no{position:absolute;left:-15px;top:0;width:28px;height:28px;border-radius:50%;
+  background:var(--blue);color:#fff;font-size:12.5px;line-height:28px;text-align:center}
+.step h4{font-size:13.5px;color:var(--blue);margin:4px 0 2px}
+.step p{font-size:12.5px;color:#39424c}
+.step .code{font-family:Consolas,monospace;font-size:11.5px;color:var(--sub)}
+.step.err .no{background:var(--red)}
+.step.err h4{color:var(--red)}
+.branch{margin-top:5px;border-left:2px dashed var(--line);padding-left:12px}
+.branch div{font-size:12.5px;color:#39424c;padding:1px 0}
+.branch .k{color:var(--blue2);font-weight:bold}
+
+/* 菱形判定 */
+.diamond{width:150px;height:76px;display:flex;align-items:center;justify-content:center;
+  text-align:center;font-size:12.5px;background:var(--amber-bg);border:1.5px solid #d9b96a;
+  transform:rotate(45deg);margin:0 auto}
+.diamond > span{transform:rotate(-45deg);display:block;width:132px;color:var(--amber)}
+
+.note{font-size:12px;color:var(--sub);margin-top:14px;padding-top:10px;border-top:1px dashed var(--line)}
+.own{display:inline-block;font-size:11px;font-weight:normal;vertical-align:2px;
+  margin-left:8px;padding:1px 7px;border-radius:9px;background:var(--blue2);color:#fff}
+.own-plat{background:#8c97a3}
+.sub{font-size:13.5px;color:var(--blue2);margin:22px 0 12px;padding-bottom:5px;
+  border-bottom:1px solid var(--line)}
+.sub:first-of-type{margin-top:4px}
+.ev{display:inline-block;font-family:Consolas,monospace;font-size:11px;font-weight:normal;
+  margin-left:6px;padding:1px 7px;border-radius:3px;background:var(--gray-bg);color:var(--sub)}
+.kv{font-size:12.5px;color:#39424c;margin-top:8px}
+.kv b{color:var(--blue)}
+@media print{body{background:#fff;padding:0}.tip{display:none}.fig{box-shadow:none;page-break-after:always}}
+</style>
+</head>
+<body>
+
+<div class="tip">
+  每张图独立卡片、白底，直接框选卡片区域截图即可贴入作品集。按 Ctrl + 滚轮可缩放到合适分辨率再截。
+  截图插入 Word 后由 Word 自行编号，本页不标图号。
+</div>
+
+<!-- ======================= 图 1 ======================= -->
+<section class="fig">
+  <h2>DCC Agent 能力层分层架构</h2>
+  <p class="cap">通用通信框架由平台提供；<b>宿主适配层</b>与<b>Action 工具层</b>为本人负责范围（蓝色高亮）</p>
+
+  <div class="layer">
+    <div class="tag">调用方</div>
+    <div class="body"><div class="box b-green"><b>AI Agent</b><span>AI 客户端 / Claude Code —— 自然语言指令</span></div></div>
+  </div>
+  <div class="arrow-d lbl" data-l="MCP / JSON-RPC"></div>
+
+  <div class="layer">
+    <div class="tag">通用框架</div>
+    <div class="body"><div class="box b-gray"><b>dcc_socket_bridge　<span class="own own-plat">平台提供</span></b>
+      <span>WebSocket 生命周期　|　JSON-RPC 协议　|　主线程队列　|　Qt 面板基类　|　单例管理　|　Action 注册</span></div></div>
+  </div>
+  <div class="arrow-d lbl" data-l="按 DCC 继承 / 注入差异"></div>
+
+  <div class="layer">
+    <div class="tag">宿主适配层</div>
+    <div class="body"><div class="box b-blue"><b>各 DCC bridge 包　<span class="own">本人负责</span></b>
+      <span>客户端薄封装 + Action 自动发现　|　主窗口获取与主线程泵适配　|　面板与菜单入口<br>
+            单例注入　|　host_api 宿主边界隔离（action 逻辑可脱离 DCC 单测）　|　Py2 / Py3 兼容</span></div></div>
+  </div>
+  <div class="arrow-d lbl" data-l="按域注册 Action（带 input / output JSON Schema）"></div>
+
+  <div class="layer">
+    <div class="tag">Action 工具层</div>
+    <div class="body">
+      <div class="box b-blue" style="padding-bottom:12px">
+        <b>Agent 可调用工具集　<span class="own">本人负责</span></b>
+        <div class="dcc-grid" style="grid-template-columns:repeat(3,1fr);margin-top:9px">
+          <div class="box"><b>diagnostics</b><span>运行时信息</span></div>
+          <div class="box"><b>scene</b><span>场景信息 / 按 URL 导入模型 / 导出模型</span></div>
+          <div class="box"><b>selection</b><span>选择集查询</span></div>
+          <div class="box"><b>node</b><span>建模节点创建</span></div>
+          <div class="box"><b>script</b><span>Python / MEL 执行</span></div>
+          <div class="box b-amber"><b>业务域（mocap）</b><span>动捕组装工具 Agent 化<br>10 个 action</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="arrow-d"></div>
+
+  <div class="layer">
+    <div class="tag">宿主</div>
+    <div class="body">
+      <div class="dcc-grid">
+        <div class="box"><b>Maya</b><span>Python 2 / 3</span></div>
+        <div class="box"><b>Substance Painter</b><span>Python 插件</span></div>
+        <div class="box"><b>Photoshop</b><span>ExtendScript</span></div>
+        <div class="box"><b>3ds Max</b><span>MaxScript</span></div>
+        <div class="box"><b>Blender</b><span>Addon</span></div>
+        <div class="box"><b>MotionBuilder</b><span>Python</span></div>
+        <div class="box"><b>Marmoset</b><span>Python</span></div>
+        <div class="box"><b>Premiere</b><span>ExtendScript</span></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note"><b>宿主适配难点：</b>Maya 2020/2022 仍为 Python 2，需 bytes/unicode、PySide/PySide2、urllib 三重兼容；
+  后台线程创建的 QTimer 不触发，改由 executeDeferred 在主线程建泵；SP 原插件为加密包，独立拆包以便部署；
+  PS 注册表注册路径错误定位与架构迁移；3ds Max 需做 ms 脚本自动搜索与路径执行。</p>
+</section>
+
+<!-- ======================= 图 2（Agent 安全边界） ======================= -->
+<section class="fig">
+  <h2>生产工具 Agent 化的安全边界设计（动捕组装工具）</h2>
+  <p class="cap">把既有重流程工具暴露给 Agent，难点不在开接口，而在约束 Agent 能做什么</p>
+
+  <div class="cols" style="align-items:stretch">
+    <div class="box b-green" style="text-align:left;padding:12px 16px">
+      <b style="text-align:center;margin-bottom:8px">只读 Action</b>
+      <span style="text-align:left">
+        · 读取界面状态与已加载镜头<br>
+        · 准备确定性配置上下文<br>
+        · 校验组装方案 / 提交正则<br>
+        <i>Agent 可自由调用，不改变 Maya 状态</i>
+      </span>
+    </div>
+    <div class="box b-amber" style="text-align:left;padding:12px 16px">
+      <b style="text-align:center;margin-bottom:8px">写入 Action（受约束）</b>
+      <span style="text-align:left">
+        · 写入 Rig / 场景路径<br>
+        · 应用配置草案、刷新指定行<br>
+        · 填入提交表达式与目标绑定<br>
+        <i>路径只接受用户明确给出的值，<br>不允许 Agent 自行发现或编造</i>
+      </span>
+    </div>
+    <div class="box b-red" style="text-align:left;padding:12px 16px">
+      <b style="text-align:center;margin-bottom:8px">需人工确认</b>
+      <span style="text-align:left">
+        · 执行组装方案：<span class="mono">confirmed=true</span><br>
+        · 批量提交：<b>永不自动触发</b><br>
+        <i>Agent 只填表达式与目标，<br>提交动作始终留给人点</i>
+      </span>
+    </div>
+  </div>
+
+  <div class="arrow-d lbl" data-l="每个写入类调用前置校验"></div>
+  <div class="box b-blue" style="max-width:760px;margin:0 auto"><b>校验先行</b>
+    <span>配置草案 / 提交正则 / 任务目标 URL 均先对当前作用域校验 —— 缺匹配或重复匹配直接拒绝，源配置永不被覆盖</span></div>
+  <div class="arrow-d lbl" data-l="通过校验且已确认"></div>
+  <div class="box b-green" style="max-width:760px;margin:0 auto"><b>异步执行 + 进度回传</b>
+    <span>长任务按变体回传进度；服务端 300 秒截断响应时保留会话并解锁面板，不误判为 DCC 执行失败</span></div>
+
+  <p class="note"><b>设计思路：</b>Agent 负责理解意图、编排顺序与生成草案；
+  工具层负责「数据从哪来、什么能写、什么必须人确认」—— 把 AI 的不确定性关在校验与确认之外。</p>
+</section>
+
+<!-- ======================= 图 2 ======================= -->
+<section class="fig">
+  <h2>A2M 资产自动归档主流程</h2>
+  <p class="cap">Arcolab（项目管理）→ Muse（资产库）　配置驱动 · 幂等可重入 · 年执行 81,073 次</p>
+
+  <div class="row" style="gap:0;margin-bottom:18px">
+    <div class="box b-green" style="flex:0 0 220px"><b>事件服务 / Deadline 农场</b><span>任务版本状态变更触发</span></div>
+    <div class="arrow-r"></div>
+    <div class="box b-gray" style="flex:0 0 330px"><b class="mono">to_muse.py</b>
+      <span class="mono">-task_id　-version_id　-force_update</span></div>
+  </div>
+
+  <div class="steps">
+    <div class="step"><div class="no">1</div><h4>初始化</h4>
+      <p>加载 Arcolab session（任务 / 指派人 / 所属供应商）+ Muse 配置（资产库 / 同步账号 / 安全级别 / feature flag）</p></div>
+    <div class="step"><div class="no">2</div><h4>准入校验</h4>
+      <p>实体黑名单过滤；<span class="code">task_type ∉ sync_task_type</span> → 跳过或报错退出</p></div>
+    <div class="step"><div class="no">3</div><h4>目录映射</h4>
+      <p>任务路径切片 <i>或</i> 自定义归档标签 → <span class="code">category_list</span>；分类结构预检，Muse 侧按需创建分类树</p></div>
+    <div class="step"><div class="no">4</div><h4>版本筛选（幂等核心）</h4>
+      <p>已回写 <span class="code">musePath</span> 的版本直接跳过；<span class="code">force_update=1</span> 可强制全量重刷；
+         同目录重名资产先清理再全量重传</p></div>
+    <div class="step"><div class="no">5</div><h4>稿件分级</h4>
+      <p>比对最新版本 / 文件夹 ID → <span class="code">version_label</span>：<b>0 = 归档稿</b>　|　<b>1 = 过程稿</b></p></div>
+    <div class="step"><div class="no">6</div><h4>文件收集</h4>
+      <div class="branch">
+        <div><span class="k">HTTP</span>　组件附件直接下载</div>
+        <div><span class="k">P4V</span>　带 p4_path 元数据的大文件走版本库 sync</div>
+        <div><span class="k">ZIP</span>　指定任务类型做分卷压缩</div>
+      </div></div>
+    <div class="step"><div class="no">7</div><h4>上传与发布</h4>
+      <p>递归上传文件 → 构造资产数据（目录树 / 分类 / 标签 / 作者 / 安全级）</p>
+      <div class="branch">
+        <div><span class="k">资产已存在</span>　<span class="code">update_asset</span> —— 合并目录树、标签、描述，不覆盖历史</div>
+        <div><span class="k">不存在</span>　　　<span class="code">publish_asset</span> —— 撞「同名作品」异常时兜底回查再更新</div>
+      </div></div>
+    <div class="step"><div class="no">8</div><h4>链接回写</h4>
+      <p><span class="code">muse_url</span> → 版本 / 任务的 <span class="code">musePath</span>，并创建 “Muse” 附件；下次触发即幂等跳过</p></div>
+    <div class="step"><div class="no">9</div><h4>供应商分发</h4>
+      <p>校验供应商空间与权限 → 资产共享至供应商空间 → 回写跳转链接</p></div>
+    <div class="step"><div class="no">10</div><h4>收尾</h4>
+      <p>更新预览图 → 清理本地临时文件 → 埋点计数</p></div>
+    <div class="step err"><div class="no">✗</div><h4>异常分支（治理静默失败）</h4>
+      <p>任意环节抛错 → traceback 捕获 → 群机器人推送报错与任务链接 → 任务置失败，可被感知并重发</p></div>
+  </div>
+</section>
+
+<!-- ======================= 图 3 ======================= -->
+<section class="fig">
+  <h2>A2M 大文件压缩-上传流水线</h2>
+  <p class="cap">原「压完再传」会长时间占满农场节点；改为边压边传，父 Job 不阻塞（按项目 feature flag 开启）</p>
+
+  <div class="box b-blue" style="max-width:720px;margin:0 auto"><b>父 Job</b>
+    <span>建资产（仅元数据，不含文件）→ 提前回写 musePath + 占位附件 <span class="mono">status=uploading</span></span></div>
+  <p class="kv" style="text-align:center">↑ 提前回写，避免 Merge 未完成时重触发产生重复资产与重复子 Job</p>
+
+  <div class="arrow-d lbl" data-l="分卷压缩，每产出一卷立即提交子 Job"></div>
+
+  <div class="cols">
+    <div class="box b-gray"><b>Upload Job　part 1</b><span>附件追加写（并发安全）<br>sidecar JSON = 已传标记</span></div>
+    <div class="box b-gray"><b>Upload Job　part 2</b><span>附件追加写（并发安全）<br>sidecar JSON = 已传标记</span></div>
+    <div class="box b-gray"><b>Upload Job　part N</b><span>断点续传：已有 sidecar 则跳过</span></div>
+  </div>
+
+  <div class="arrow-d lbl" data-l="Merge Job 依赖全部 Upload Job 完成"></div>
+
+  <div class="box b-green" style="max-width:720px;margin:0 auto"><b>Merge Job</b>
+    <span>校验 sidecar 数 == 分卷数 → 更新预览图 / 供应商分发 / 清理本地盘 / 附件状态置完成</span></div>
+
+  <p class="note"><b>设计要点：</b>父 Job 提交完 Merge 即返回，不占用节点等待上传；
+  Upload 子 Job 用附件追加写规避「读-改-写」并发竞争；sidecar 落盘使单卷失败只需重跑该卷。</p>
+</section>
+
+<!-- ======================= 图 4 ======================= -->
+<section class="fig">
+  <h2>DCC 云盘启动链路</h2>
+  <p class="cap">云盘挂载替代制作机本地 SVN 工程盘，DCC 直接从云盘读取环境与工具</p>
+
+  <div class="row" style="gap:0;flex-wrap:wrap">
+    <div class="box b-blue" style="flex:0 0 150px"><b>启动器</b><span>传入云盘 ID<br>与挂载路径参数</span></div>
+    <div class="arrow-r"></div>
+    <div class="box b-amber" style="flex:0 0 160px"><b>母盘 ID 查询</b><span>由子盘改母盘查询<br>用户可挂载子盘</span></div>
+    <div class="arrow-r"></div>
+    <div class="box b-gray" style="flex:0 0 160px"><b>云盘挂载</b><span>静默挂载<br>Defender 排除项自动添加</span></div>
+    <div class="arrow-r"></div>
+    <div class="box b-gray" style="flex:0 0 170px"><b>环境加载</b><span>cmd + post_command<br>兼容多套环境变量差异</span></div>
+    <div class="arrow-r"></div>
+    <div class="box b-green" style="flex:0 0 150px"><b>DCC 启动</b><span>工程与工具箱<br>直接从云盘读取</span></div>
+  </div>
+
+  <p class="note"><b>已落地：</b>Maya 2020 / 2022 / 2023、3ds Max 2019 / 2022、Nuke、MotionBuilder、Blender。
+  <b>收益：</b>制作机单盘容量不再限制分支部署，形成可复制的云盘 + DCC 启动标准链路。</p>
+</section>
+
+<!-- ======================= 图 5 ======================= -->
+<section class="fig">
+  <h2>Maya 回调注册机制与病毒三道防线</h2>
+  <p class="cap">配置驱动注册 + 执行前阻断 / 内存清理 / 落盘隔离　——　崩溃治理从「逐例排查」到「自动免疫」</p>
+
+  <h3 class="sub">一、启动期回调注册（配置驱动）</h3>
+  <div class="row" style="gap:0;margin-bottom:6px">
+    <div class="box b-green" style="flex:0 0 150px"><b>Maya 启动</b><span>启动注入层</span></div>
+    <div class="arrow-r"></div>
+    <div class="box b-blue" style="flex:0 0 230px"><b>读取回调配置</b>
+      <span class="mono">事件 → 模块 → 函数列表</span></div>
+    <div class="arrow-r lbl" data-l="按事件类型分派"></div>
+    <div class="box b-amber" style="flex:0 0 220px"><b>回调 ID 记账</b>
+      <span>key = <span class="mono">事件.函数名</span><br>重复注册检测 / 可反注册</span></div>
+  </div>
+  <div class="arrow-d"></div>
+  <div class="dcc-grid" style="grid-template-columns:repeat(5,1fr)">
+    <div class="box"><b>scriptJob</b><span>通用事件</span></div>
+    <div class="box b-red"><b>kBeforeOpen</b><span>打开文件前</span></div>
+    <div class="box b-red"><b>kAfterOpen</b><span>打开文件后</span></div>
+    <div class="box"><b>kBeforeSave</b><span>保存前自动备份</span></div>
+    <div class="box"><b>Timer</b><span>按分钟定时<br>久未保存提醒</span></div>
+  </div>
+
+  <h3 class="sub">二、打开文件时的病毒三道防线</h3>
+  <div class="steps">
+    <div class="step"><div class="no">1</div><h4>执行前阻断　<span class="ev">kBeforeOpen</span></h4>
+      <p>关闭 script 节点自动执行开关 → 病毒代码在<b>读场景阶段根本不会运行</b>，而非执行后再补救</p></div>
+    <div class="step"><div class="no">2</div><h4>读取场景</h4>
+      <p>恶意 script 节点以惰性数据形式进入场景，不触发执行</p></div>
+    <div class="step"><div class="no">3</div><h4>内存清理　<span class="ev">kAfterOpen</span></h4>
+      <div class="branch">
+        <div><span class="k">双判据定位</span>　名字黑名单（vaccine_gene / breed_gene / fuckVirus_gene / maya_secure_system …）
+             ＋ 代码特征（<span class="mono">import base64</span>、<span class="mono">write</span> 等）</div>
+        <div><span class="k">安全处理</span>　跳过 reference 来源节点 → 解锁节点 → 删除</div>
+        <div><span class="k">残留清理</span>　按黑名单 kill 可疑 scriptJob；清理未知节点 / 未知插件 / 未知 DAG 节点</div>
+      </div></div>
+    <div class="step"><div class="no">4</div><h4>落盘隔离</h4>
+      <p>扫描用户 Maya 脚本目录，非预期注入脚本<b>改名隔离而非直接删除</b>，保留回滚余地</p></div>
+    <div class="step"><div class="no">5</div><h4>恢复执行　<span class="ev">kAfterOpen</span></h4>
+      <p>还原 script 节点自动执行开关，正常功能节点不受影响</p></div>
+    <div class="step"><div class="no">6</div><h4>埋点上报</h4>
+      <p>每次清理上报场景路径 + 被清节点清单，失败记告警 → 感染面与复发率可统计</p></div>
+  </div>
+
+  <p class="note"><b>工程取舍（白名单）：</b>未知插件清理必须放过相机遮幅等关键插件 ——
+  抹掉 <span class="mono">requires</span> 条目后存盘，相机绑定里的遮幅会永久丢失且无任何提示，宁可留条目也不做静默破坏；
+  但白名单内的节点若检出危险代码，仍会被清掉。<br>
+  <b>同体系复用：</b>保存前自动备份到时间戳目录、namespace 清理、reference 失败编辑清理、关键插件缺失兜底加载并暴露告警。</p>
+</section>
+
+<!-- ======================= 图 6 ======================= -->
+<section class="fig">
+  <h2>渲染农场节点分布式清理定时任务</h2>
+  <p class="cap">「用农场清理农场」—— 节点维护零人工介入</p>
+
+  <div class="row" style="gap:0">
+    <div class="box b-blue" style="flex:0 0 190px"><b>定时任务</b><span>每日凌晨触发</span></div>
+    <div class="arrow-r lbl" data-l="读取节点列表与策略"></div>
+    <div class="box b-amber" style="flex:0 0 190px"><b>YAML 配置</b><span>节点与清理策略配置驱动<br>调整无需改代码</span></div>
+  </div>
+  <div class="arrow-d lbl" data-l="按 Whitelist 参数定向分发清理作业"></div>
+  <div class="cols">
+    <div class="box b-gray"><b>节点 1</b><span>清理 Temp<br>与任务缓存</span></div>
+    <div class="box b-gray"><b>节点 2</b><span>清理 Temp<br>与任务缓存</span></div>
+    <div class="box b-gray"><b>…</b><span>逐一分发</span></div>
+    <div class="box b-gray"><b>节点 16</b><span>清理 Temp<br>与任务缓存</span></div>
+  </div>
+  <div class="arrow-d"></div>
+  <div class="box b-green" style="max-width:620px;margin:0 auto"><b>结果</b>
+    <span>缓存堆积导致的渲染异常被消除，无需人工逐台登录清理</span></div>
+</section>
+
+</body>
+</html>

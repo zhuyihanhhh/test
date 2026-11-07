@@ -1,0 +1,15 @@
+--- 9 style=Normal align=None
+  run0 bold=True size=127000 name=微软雅黑 text='A · 宿主适配层'
+  run1 bold=False size=127000 name=微软雅黑 text='每款 DCC 一套 bridge 包：客户端薄封装与 act'
+--- 10 style=Normal align=None
+  run0 bold=True size=127000 name=微软雅黑 text='B · Action 工具层'
+  run1 bold=False size=127000 name=微软雅黑 text='把 DCC 能力按域封装成 Agent 可调用的工具，每个 '
+  run2 bold=False size=127000 name=微软雅黑 text='。'
+--- 15 style=Normal align=None
+  run0 bold=True size=127000 name=微软雅黑 text='方案\u3000'
+  run1 bold=False size=127000 name=微软雅黑 text='做成一条配置驱动、幂等可重入的归档管线：任务版本状态变更触发'
+--- 21 style=Normal align=None
+  run0 bold=False size=127000 name=微软雅黑 text='静默失败治理（报错回传 + 失败重发）；供应商空间上线后批量'
+--- 28 style=Normal align=None
+  run0 bold=True size=127000 name=微软雅黑 text='成果\u3000'
+  run1 bold=False size=127000 name=微软雅黑 text='已落地 Maya 2020/2022/2023、3ds Ma'
